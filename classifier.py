@@ -1,5 +1,3 @@
-# imports
-
 # external
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -294,10 +292,17 @@ def make_classification(classifier_obj: object, params: dict,
     roc_train = classifier.calculate_roc_auc(X_train, y_train)
     roc_test = classifier.calculate_roc_auc(X_test, y_test)
 
+    
+    # average precision
+    ap_train = classifier.calculate_precision_recall_auc(X_train, y_train)
+    ap_test = classifier.calculate_precision_recall_auc(X_test, y_test)
+    
     print("Main results trainset:")
     print(report_train)
     print(f"roc auc train: {roc_train}")
+    print(f"precision-recall auc train: {ap_train}")
     classifier.plot_roc(X_train, y_train)
+    classifier.plot_precision_recall(X_train, y_train)
     classifier.plot_confusion_matrix(X_train, y_train)
 
     print("-----------------------------------------")
@@ -305,7 +310,9 @@ def make_classification(classifier_obj: object, params: dict,
     print("Main results testset:")
     print(report_test)
     print(f"roc auc test: {roc_test}")
+    print(f"precision-recall auc test: {ap_test}")
     classifier.plot_roc(X_test, y_test)
+    classifier.plot_precision_recall(X_test, y_test)
     classifier.plot_confusion_matrix(X_test, y_test)
     
     return classifier

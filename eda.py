@@ -51,7 +51,7 @@ def plot_distribution_labels(data: pd.DataFrame, plot_title: str, output_col: st
     """
 
     # number of examples per category
-    data_count = data[output_col].value_count()
+    data_count = data[output_col].value_counts()
 
     # labels
     labels = list(data_count.index)
