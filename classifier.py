@@ -1,9 +1,20 @@
+# imports
+
 # external
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, roc_curve, auc, average_precision_score, plot_precision_recall_curve, plot_confusion_matrix
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import classification_report, roc_curve, auc, average_precision_score, plot_precision_recall_curve, f1_score, plot_confusion_matrix
 import joblib
+
+# custom
+from utils import *
+
+RANDOM_STATE = 123
+
+
 
 class Classifier(object):
     """
@@ -297,23 +308,99 @@ def make_classification(classifier_obj: object, params: dict,
     ap_train = classifier.calculate_precision_recall_auc(X_train, y_train)
     ap_test = classifier.calculate_precision_recall_auc(X_test, y_test)
     
-    print("Main results trainset:")
-    print(report_train)
-    print(f"roc auc train: {roc_train}")
-    print(f"precision-recall auc train: {ap_train}")
+    # score
+    score_train = classifier.calculate_score(X_train, y_train)
+    score_test = classifier.calculate_score(X_test, y_test)
+    
+    
+    print("--------- Main results trainset: --------- ")
+    #print(report_train)
+    print(f"{scoring} train: {round(score_train, 3)}")
+    print(f"roc auc train: {round(roc_train,3)}")
+    #print(f"precision-recall auc train: {ap_train}")
     classifier.plot_roc(X_train, y_train)
-    classifier.plot_precision_recall(X_train, y_train)
+    #classifier.plot_precision_recall(X_train, y_train)
     classifier.plot_confusion_matrix(X_train, y_train)
 
-    print("-----------------------------------------")
 
-    print("Main results testset:")
-    print(report_test)
-    print(f"roc auc test: {roc_test}")
-    print(f"precision-recall auc test: {ap_test}")
+    print("--------- Main results testset: --------- ")
+    #print(report_test)
+    print(f"{scoring} test: {round(score_test, 3)}")
+    print(f"roc auc test: {round(roc_test,3)}")
+    #print(f"precision-recall auc test: {ap_test}")
     classifier.plot_roc(X_test, y_test)
-    classifier.plot_precision_recall(X_test, y_test)
+    #classifier.plot_precision_recall(X_test, y_test)
     classifier.plot_confusion_matrix(X_test, y_test)
     
     return classifier
+
+
+def run_xgb(data, lag=-1, save_model_as="modelo.pkl"):
+    stats_func_names = ["lag", "sma", "cma", "ewm", "smvar", "cmvar", "ewvar"]
+    columns_to_lag = ["cmg_desv", "demanda_mwh", "cap_inst_mw", "en_total_mwh"]
+
+    to_drop = [
+        # "cmg_real",
+        # "cmg_prog",
+        # "cmg_desv_pct",
+        "gen_eolica_total_mwh",
+        "gen_geotermica_total_mwh",
+        "gen_hidraulica_total_mwh",
+        "gen_solar_total_mwh",
+        "gen_termica_total_mwh"
+    ]
+
+    df = data.copy().drop(to_drop, axis=1)
+
+    X, y = make_feature_engineering(df, lag=lag, stats_func_names=stats_func_names,
+                                    columns_to_lag=columns_to_lag, drop_target_col=False)
+
+    ## strategy
+    # Hyperparameter optimization
+    search = GridSearchCV
+
+    # cross validation
+    n_folds = 5
+    print(f"Creating {n_folds} validation folders")
+    cv, train_vad_index, test_index = split_train_vad_test(X, 0.1, n_folds)
+
+    # score to compare models
+    scoring = "f1"
+
+    # train-validation-test split
+    X_train = X[X.index.isin(train_vad_index)]
+    X_test = X[X.index.isin(test_index)]
+
+    y_train = y[y.index.isin(X_train.index)]["target"]
+    y_test = y[y.index.isin(X_test.index)]["target"]
+
+    ## make classification
+    # classifier object
+    classf_obj = XGBClassifier()
+
+    # parameters
+    parameters = {
+        "classifier__n_estimators": [10, 100],
+        "classifier__max_depth": [10, 100],
+        "classifier__random_state": [RANDOM_STATE]
+    }
+
+    xgb = make_classification(classf_obj, parameters, X_train, y_train, X_test, y_test,
+                              search=search, cv=cv, scoring=scoring)
+
+    xgb.save_classifier_obj(save_model_as)
+    print(f"best parameters: {xgb.search_obj.best_params_}")
+
+    # feature importance
+    xgb_fi = plot_feature_importance(X.columns, xgb.search_obj.best_estimator_["classifier"].feature_importances_, n=10)
+
+    # display 10 most influent parameters
+    print(xgb_fi.iloc[:10])
+
+    # parameters without influence
+    params_nulls = list(xgb_fi[xgb_fi["importance"] == 0].index)
+
+    print(f"Hay {len(params_nulls)} variables que no influyen")
+
+    return xgb, xgb_fi
 

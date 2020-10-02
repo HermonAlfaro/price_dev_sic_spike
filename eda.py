@@ -1,5 +1,8 @@
 # imports
 
+# internal
+import datetime
+
 # external
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -32,9 +35,9 @@ def missing_values_table(df: pd.DataFrame) -> pd.DataFrame:
         '% of Total Values', ascending=False).round(1)
 
     # Print some summary information
-    print("There are " + str(df.shape[1]) + " columnas.\n"
-                                      "There are" + str(mis_val_table_ren_columns.shape[0])
-          + "columns with missing values")
+    print("Hay " + str(df.shape[1]) + " columnas.\n"
+                                      "Hay " + str(mis_val_table_ren_columns.shape[0])
+          + " columnas con valores nulos")
 
     # Return the dataframe with missing information
     return mis_val_table_ren_columns
@@ -145,3 +148,40 @@ def correlation_df(data: pd.DataFrame, target_col: str) -> pd.DataFrame:
     corr_target_features.columns = ["correlation"]
 
     return corr_target_features
+
+def time_plot_costo_barra(cm, codigo_barra, fecha_inicial=None, fecha_final=None):
+    
+    
+    # filtrar codigo de barra
+    tmp = cm[cm["barra"]==codigo_barra].dropna()
+    
+    # index by time
+    tmp["datetime"] = pd.to_datetime(tmp["fecha"])
+    
+    if fecha_inicial:
+        tmp = tmp[fecha_inicial<=tmp["datetime"]]
+    if fecha_final:
+        tmp = tmp[tmp["datetime"]<=fecha_final]
+    
+    plt.plot(tmp.set_index("datetime")[["cmg_real", "cmg_prog"]])
+    plt.legend(["cmg_real", "cmg_prog"])
+    plt.xlabel("fecha")
+    plt.show()
+    
+def evolucion_diaria(ds, subestacion, variable, fechas, ax=None):
+    
+    fechas_dt = [datetime.date(year=int(f.split("-")[0]), 
+                                   month=int(f.split("-")[1]), 
+                                   day=int(f.split("-")[2])) for f in fechas]
+    
+    tmp = ds[(ds["nemotecnico_se"]==subestacion) & (ds["fecha"].isin(fechas_dt))]
+    
+    tmp = pd.pivot_table(tmp, index="hora", values=variable, columns="fecha")
+    
+    tmp.plot(ax=ax)
+    plt.legend(fechas)
+    plt.xlabel("Hora del día")
+    plt.ylabel(variable)
+    
+
+    
